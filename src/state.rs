@@ -5034,7 +5034,7 @@ impl State {
             self.open(0);
             vec![]
         } else {
-            vec![Effect::Quit]
+            vec![]
         }
     }
 }
