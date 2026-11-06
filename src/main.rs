@@ -2310,6 +2310,7 @@ fn run() -> Result<(), String> {
     if webos {
         // Ask EGL and Wayland compositor to preserve per-pixel alpha.
         sdl2::hint::set("SDL_VIDEO_EGL_ALLOW_TRANSPARENCY", "1");
+        sdl2::hint::set("SDL_VIDEO_ALLOW_SCREENSAVER", "1");
     }
     let sdl = sdl2::init()?;
     let drivers: Vec<_> = sdl2::video::drivers().collect();
