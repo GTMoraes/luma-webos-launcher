@@ -50,6 +50,9 @@ pub const SECTION_ORDER: &[usize] = &[0, 1, 6, 7, 2, 3, 4, 5];
 pub const SECTION_ORDER: &[usize] = &[0, 1, 6, 2, 4, 5];
 const _: () = assert!(SECTION_ORDER.len() <= SECTION_COUNT);
 pub const APPS_COLUMNS: usize = 6;
+/// Android TV quick settings: settings rows, then at most this many notifications.
+pub const QUICK_SETTINGS: usize = 6;
+pub const QUICK_NOTICES: usize = 4;
 pub const HOME_STRIP_LEFT: f32 = 84.;
 pub const HOME_STRIP_RIGHT: f32 = 1836.;
 pub const HOME_VIEWPORT_LEFT: f32 = 0.;
@@ -296,9 +299,28 @@ pub struct Control {
 
 #[derive(Clone, Debug)]
 pub enum Overlay {
-    Options { id: String, restore: Target },
+    Options {
+        id: String,
+        restore: Target,
+    },
     Keyboard,
     SystemKeyboard,
+    /// Android TV quick settings, from the header's settings button.
+    Quick {
+        restore: Target,
+    },
+}
+
+/// One row of the Android TV quick settings panel.
+#[derive(Clone, Debug, PartialEq)]
+pub struct QuickRow {
+    pub icon: &'static str,
+    pub title: String,
+    pub detail: Option<String>,
+    /// What `Effect::Launch` opens (see android.rs `valid_target`).
+    pub action: String,
+    /// Part of the notifications group, below the settings.
+    pub notice: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -396,6 +418,8 @@ pub enum Effect {
     PlayUrl(String, String),
     /// Read root features, applying a change first when one is given.
     Root(Option<crate::platform::RootSet>),
+    /// Android TV: read the connection and notifications for quick settings.
+    Quick,
 }
 
 /// Drag offset with resistance past either end (0..max), the iOS rubber band.
@@ -541,6 +565,8 @@ pub struct State {
     pub last_overlay: Vec<Draw>,
     pub first_home: bool,
     pub overlay: Option<Overlay>,
+    /// Android TV quick settings: connection and notifications.
+    pub quick: crate::platform::QuickInfo,
     pub moving: Option<String>,
     pub loading: bool,
     /// Set by Refresh apps: the next inventory also reloads every app icon.
@@ -733,6 +759,7 @@ impl State {
             last_overlay: Vec::new(),
             first_home: true,
             overlay: None,
+            quick: crate::platform::QuickInfo::default(),
             moving: None,
             loading: false,
             reload_artwork: false,
@@ -3184,6 +3211,144 @@ impl State {
         }
     }
 
+    /// Android TV: the header's settings button opens Luma's quick settings,
+    /// in place of the Google TV panel.
+    pub fn open_quick(&mut self) -> Vec<Effect> {
+        if self.overlay.is_some() {
+            return vec![];
+        }
+        self.overlay = Some(Overlay::Quick {
+            restore: self.focus.clone(),
+        });
+        self.focus = Target::Option(0);
+        if !self.preferences.reduced_motion {
+            self.panel_started = Some(Instant::now());
+        }
+        self.dirty = true;
+        vec![Effect::Quick]
+    }
+
+    /// Quick settings rows: system settings pages, then notifications.
+    pub fn quick_rows(&self) -> Vec<QuickRow> {
+        let language = self.preferences.language;
+        let setting = |icon, key: &str, detail: Option<String>, action: &str| QuickRow {
+            icon,
+            title: language.t(key).to_owned(),
+            detail,
+            action: format!("action:{action}"),
+            notice: false,
+        };
+        let network = match self.quick.network.as_str() {
+            "wifi" => format!(
+                "Wi-Fi · {}",
+                language.t(match self.quick.signal {
+                    0 | 1 => "signalWeak",
+                    2 | 3 => "signalGood",
+                    _ => "signalExcellent",
+                })
+            ),
+            "ethernet" => language.t("networkEthernet").to_owned(),
+            "none" => language.t("networkNone").to_owned(),
+            _ => String::new(),
+        };
+        let mut rows = vec![
+            setting(
+                "globe",
+                "quickNetwork",
+                (!network.is_empty()).then_some(network),
+                "android.settings.WIFI_SETTINGS",
+            ),
+            setting(
+                "tv",
+                "quickDisplaySound",
+                None,
+                "android.settings.SOUND_SETTINGS",
+            ),
+            setting(
+                "sparkles",
+                "quickScreensaver",
+                None,
+                "com.google.android.tv.settings.ambient",
+            ),
+            setting(
+                "grid",
+                "apps",
+                None,
+                "android.settings.APPLICATION_SETTINGS",
+            ),
+            setting(
+                "clock",
+                "quickDateTime",
+                None,
+                "android.settings.DATE_SETTINGS",
+            ),
+            setting(
+                "settings",
+                "quickAllSettings",
+                None,
+                "android.settings.SETTINGS",
+            ),
+        ];
+        if !self.quick.notifications_allowed {
+            rows.push(QuickRow {
+                icon: "alert",
+                title: language.t("quickAllowNotifications").to_owned(),
+                detail: None,
+                action: "action:android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS".into(),
+                notice: true,
+            });
+            return rows;
+        }
+        for notice in self.quick.notices.iter().take(QUICK_NOTICES) {
+            let title = if notice.title.is_empty() {
+                notice.app.clone()
+            } else {
+                notice.title.clone()
+            };
+            let detail = [notice.app.as_str(), notice.text.as_str()]
+                .into_iter()
+                .filter(|part| !part.is_empty() && *part != title)
+                .collect::<Vec<_>>()
+                .join(" · ");
+            rows.push(QuickRow {
+                icon: "alert",
+                title,
+                detail: (!detail.is_empty()).then_some(detail),
+                action: format!("notification:{}", notice.key),
+                notice: true,
+            });
+        }
+        if !self.quick.notices.is_empty() {
+            rows.push(QuickRow {
+                icon: "close",
+                title: language.t("quickClearNotifications").to_owned(),
+                detail: None,
+                action: "notifications:clear".into(),
+                notice: true,
+            });
+        }
+        rows
+    }
+
+    fn quick_activate(&mut self, index: usize) -> Vec<Effect> {
+        let Some(row) = self.quick_rows().into_iter().nth(index) else {
+            return vec![];
+        };
+        self.dirty = true;
+        if row.action == "notifications:clear" {
+            // Stay open and show the emptied list.
+            self.quick.notices.clear();
+            self.focus = Target::Option(index.saturating_sub(1).min(QUICK_SETTINGS - 1));
+            return vec![Effect::Launch(row.action), Effect::Quick];
+        }
+        if let Some(Overlay::Quick { restore }) = self.overlay.take() {
+            self.focus = restore;
+        }
+        self.panel_started = None;
+        self.pointer = false;
+        vec![Effect::Launch(row.action)]
+    }
+
     pub fn hold(&mut self) -> Vec<Effect> {
         if self.widget_hold() {
             return vec![];
@@ -4367,6 +4532,7 @@ impl State {
             Target::Retry => return vec![Effect::Reload],
             Target::DismissNotice => self.notice = None,
             Target::CloseDialog => return self.back(),
+            Target::TvSettings if cfg!(target_os = "android") => return self.open_quick(),
             Target::TvSettings => return vec![Effect::Launch("com.palm.app.settings".into())],
             Target::App(id) | Target::Input(id) if !self.launching => {
                 return vec![Effect::Launch(id)];
@@ -4743,6 +4909,19 @@ impl State {
                 self.close_subpage();
                 return vec![Effect::Save];
             }
+            Target::Option(index) if matches!(self.overlay, Some(Overlay::Quick { .. })) => {
+                return self.quick_activate(index);
+            }
+            Target::Option(2) if cfg!(target_os = "android") => {
+                // Android TV: the system asks before it uninstalls.
+                let Some(Overlay::Options { id, restore }) = self.overlay.take() else {
+                    return vec![];
+                };
+                self.panel_started = None;
+                self.focus = restore;
+                self.pointer = false;
+                return vec![Effect::Launch(format!("uninstall:{id}"))];
+            }
             Target::Option(index) => {
                 let Some(Overlay::Options { id, restore }) = self.overlay.take() else {
                     return vec![];
@@ -4892,7 +5071,7 @@ impl State {
         }
         if let Some(overlay) = self.overlay.take() {
             self.panel_started = None;
-            if let Overlay::Options { restore, .. } = overlay {
+            if let Overlay::Options { restore, .. } | Overlay::Quick { restore } = overlay {
                 self.focus = restore;
                 return vec![];
             }

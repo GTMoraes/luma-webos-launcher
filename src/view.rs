@@ -985,12 +985,15 @@ pub fn scene_with_pill(
         out.settings_panel_range = 0..0;
         out.settings_sidebar_range = 0..0;
     }
-    if let Some(overlay @ (Overlay::Options { .. } | Overlay::Keyboard)) = &state.overlay {
+    if let Some(overlay @ (Overlay::Options { .. } | Overlay::Keyboard | Overlay::Quick { .. })) =
+        &state.overlay
+    {
         out.controls.clear();
         let start = out.draw.len();
         out.shape(Rect::new(0., 0., 1920., 1080.), 0., c(0x080b12, 0.70));
         match overlay {
             Overlay::Options { id, .. } => options(&mut out, state, assets, id),
+            Overlay::Quick { .. } => quick(&mut out, state, assets),
             Overlay::Keyboard => keyboard(&mut out, state, assets),
             Overlay::SystemKeyboard => {}
         }
@@ -3916,7 +3919,9 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str) {
     let title_style = text(38., 600, -0.03).leading(1.1);
     let extra = assets.lines(title, title_style, 440.).saturating_sub(1) as f32 * 42.;
     let (row_h, row_gap) = (72., 16.);
-    let panel_h = 40. + 46. + extra + 8. + 30. + 32. + 2. * row_h + row_gap + 40.;
+    // Android TV adds Uninstall; the system confirms it.
+    let rows = if cfg!(target_os = "android") { 3. } else { 2. };
+    let panel_h = 40. + 46. + extra + 8. + 30. + 32. + rows * row_h + (rows - 1.) * row_gap + 40.;
     let panel = Rect::new(660., (1080. - panel_h) / 2., 600., panel_h);
     out.modal = Some(panel);
     out.shadow(panel, 32., 120., 25., 0.47);
@@ -3960,8 +3965,10 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str) {
             language.t("addFavorite")
         },
         language.t(if hidden { "showApp" } else { "hideApp" }),
+        language.t("uninstallApp"),
     ]
     .into_iter()
+    .take(rows as usize)
     .enumerate()
     {
         let rect = Rect::new(
@@ -3977,6 +3984,8 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str) {
             assets,
             if index == 0 {
                 if favorite { "heart-filled" } else { "heart" }
+            } else if index == 2 {
+                "close"
             } else if hidden {
                 "eye"
             } else {
@@ -3996,6 +4005,135 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str) {
             false,
         );
         out.control(Target::Option(index), rect, false);
+    }
+}
+
+/// Android TV quick settings: a side panel in place of the Google TV one.
+/// Settings rows open the system pages; notification rows open their app.
+fn quick(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let panel = Rect::new(1920. - 40. - 620., 36., 620., 1008.);
+    out.modal = Some(panel);
+    out.shadow(panel, 32., 120., 25., 0.47);
+    out.glass_on_scrim(panel, 32., 0.3);
+    let left = panel.x + 32.;
+    let width = panel.w - 64.;
+    out.text(
+        language.t("quickSettings"),
+        Rect::new(left + 8., panel.y + 34., width - 80., 46.),
+        text(36., 600, -0.03),
+        WHITE,
+        false,
+    );
+    let close = Rect::new(panel.x + panel.w - 32. - 56., panel.y + 28., 56., 56.);
+    let focus = state.focus_level(&Target::CloseDialog);
+    out.pill_progress(close, focus, false);
+    out.icon(
+        assets,
+        "close",
+        close.inset(18.),
+        blend(c(0xffffff, 0.92), accent_ink(state), focus),
+    );
+    out.control(Target::CloseDialog, close, false);
+    let title_style = text(24., 500, 0.);
+    let detail_style = text(20., 400, 0.);
+    let mut y = panel.y + 108.;
+    let mut heading = false;
+    let rows = state.quick_rows();
+    let heading_text = |out: &mut Scene, y: f32| {
+        out.text(
+            language.t("quickNotifications").to_uppercase(),
+            Rect::new(left + 8., y + 10., width - 16., 28.),
+            text(20., 600, 0.04),
+            c(0xffffff, 0.55),
+            false,
+        );
+    };
+    for (index, row) in rows.iter().enumerate() {
+        if row.notice && !heading {
+            heading = true;
+            heading_text(out, y);
+            y += 44.;
+        }
+        let two_lines = row.notice && row.detail.is_some();
+        let h = if two_lines { 80. } else { 60. };
+        let rect = Rect::new(left, y, width, h);
+        let focus = state.focus_level(&Target::Option(index));
+        out.pill_progress(rect, focus, false);
+        let ink = blend(c(0xffffff, 0.92), accent_ink(state), focus);
+        let dim = blend(c(0xffffff, 0.6), accent_ink(state), focus);
+        out.icon(
+            assets,
+            row.icon,
+            Rect::new(rect.x + 24., rect.y + (h - 24.) / 2., 24., 24.),
+            ink,
+        );
+        let text_x = rect.x + 68.;
+        let text_w = rect.w - 92.;
+        if two_lines {
+            out.text(
+                tvos_settings_view::ellipsis_for_smart(assets, &row.title, title_style, text_w),
+                Rect::new(text_x, rect.y + 12., text_w, 30.),
+                title_style,
+                ink,
+                false,
+            );
+            out.text(
+                tvos_settings_view::ellipsis_for_smart(
+                    assets,
+                    row.detail.as_deref().unwrap_or_default(),
+                    detail_style,
+                    text_w,
+                ),
+                Rect::new(text_x, rect.y + 44., text_w, 26.),
+                detail_style,
+                dim,
+                false,
+            );
+        } else {
+            let detail_w = row.detail.as_deref().map_or(0., |detail| {
+                assets.width(detail, detail_style).min(240.) + 16.
+            });
+            out.text(
+                tvos_settings_view::ellipsis_for_smart(
+                    assets,
+                    &row.title,
+                    title_style,
+                    text_w - detail_w,
+                ),
+                line_box(Rect::new(text_x, rect.y, text_w - detail_w, h), title_style),
+                title_style,
+                ink,
+                false,
+            );
+            if let Some(detail) = row.detail.as_deref() {
+                let detail =
+                    tvos_settings_view::ellipsis_for_smart(assets, detail, detail_style, 240.);
+                let w = assets.width(&detail, detail_style);
+                out.text(
+                    detail,
+                    line_box(
+                        Rect::new(rect.x + rect.w - 24. - w, rect.y, w + 2., h),
+                        detail_style,
+                    ),
+                    detail_style,
+                    dim,
+                    false,
+                );
+            }
+        }
+        out.control(Target::Option(index), rect, false);
+        y += h + 8.;
+    }
+    if !heading && state.quick.notifications_allowed {
+        heading_text(out, y);
+        out.text(
+            language.t("quickNoNotifications"),
+            Rect::new(left + 8., y + 52., width - 16., 30.),
+            text(22., 400, 0.),
+            c(0xffffff, 0.6),
+            false,
+        );
     }
 }
 

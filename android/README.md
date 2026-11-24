@@ -14,6 +14,31 @@ No Android não existem: Moonlight, Jellyfin, Plex, player, música, cripto, ent
 de parede em vídeo. O papel de parede é escolhido entre as fotos em Ajustes › Wallpaper. Voltar
 na tela inicial abre o Mystify (`com.frx9.mystify`), como o Google TV faz com o protetor dele.
 
+O botão de ajustes no canto superior direito abre as configurações rápidas do Luma: rede, tela e
+som, protetor de tela, apps, data e hora, todas as configurações e as notificações. As
+notificações aparecem depois que o Luma recebe o Acesso a notificações (a própria linha do painel
+abre essa página). Segurar OK num app da lista de Apps oferece Desinstalar, que o sistema confirma
+antes de remover.
+
+## Luma como tela inicial
+
+O Luma se declara como tela inicial. Para o botão Home abrir o Luma sem serviço de acessibilidade,
+o launcher do Google TV e o assistente de configuração precisam ficar desativados:
+
+```powershell
+& $A shell pm disable-user --user 0 com.google.android.apps.tv.launcherx
+& $A shell pm disable-user --user 0 com.google.android.tungsten.setupwraith
+& $A shell cmd package set-home-activity --user 0 com.frx9.luma/.LumaActivity
+```
+
+Para voltar ao launcher do Google:
+
+```powershell
+& $A shell pm enable --user 0 com.google.android.apps.tv.launcherx
+& $A shell pm enable --user 0 com.google.android.tungsten.setupwraith
+& $A shell cmd package set-home-activity --user 0 com.google.android.apps.tv.launcherx/.home.HomeActivity
+```
+
 ## Chave de assinatura
 
 O workflow usa os mesmos quatro segredos do Mystify (mesma chave, assim as atualizações instalam

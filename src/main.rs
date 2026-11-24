@@ -258,6 +258,7 @@ fn effects(
                 }
             }
             Effect::Root(change) => platform.send(Request::Root(change)),
+            Effect::Quick => platform.send(Request::Quick),
             effect @ (Effect::Refresh | Effect::Reload) => {
                 state.reload_artwork |= effect == Effect::Reload;
                 if !state.loading {
@@ -848,7 +849,11 @@ fn compose(
     state.rendered_subpage = state.subpage.clone();
     let overlay_open = matches!(
         state.overlay,
-        Some(state::Overlay::Keyboard | state::Overlay::Options { .. })
+        Some(
+            state::Overlay::Keyboard
+                | state::Overlay::Options { .. }
+                | state::Overlay::Quick { .. }
+        )
     );
     if !overlay_open && !state.last_overlay.is_empty() {
         state.previous_overlay_layer =
@@ -2835,6 +2840,19 @@ fn run_with(mut options: Options) -> Result<(), String> {
                         state.dirty = true;
                     }
                 }
+                Response::Quick(info) => {
+                    state.quick = info;
+                    // Keep the focus on a row that still exists.
+                    if matches!(state.overlay, Some(state::Overlay::Quick { .. }))
+                        && let Target::Option(index) = state.focus
+                    {
+                        let rows = state.quick_rows().len();
+                        if index >= rows {
+                            state.focus = Target::Option(rows.saturating_sub(1));
+                        }
+                    }
+                    state.dirty = true;
+                }
                 Response::Root(result) => {
                     match result {
                         Ok(status) => state.root = status,
@@ -3162,6 +3180,9 @@ fn run_with(mut options: Options) -> Result<(), String> {
                         }
                         if tv {
                             pending.push(Effect::Refresh);
+                        }
+                        if matches!(state.overlay, Some(Overlay::Quick { .. })) {
+                            pending.push(Effect::Quick);
                         }
                         // Back from the web player: media has the new watch time.
                         if let Some(id) = state.web_player_item.take()

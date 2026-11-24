@@ -1111,5 +1111,117 @@
     "es": "Luma lo volverá a intentar sola.",
     "zh": "Luma 会自动重试。",
     "pt": "A Luma vai tentar de novo sozinha."
+  },
+  "quickSettings": {
+    "en": "Quick settings",
+    "de": "Schnelleinstellungen",
+    "es": "Ajustes rápidos",
+    "zh": "快速设置",
+    "pt": "Configurações rápidas"
+  },
+  "quickNetwork": {
+    "en": "Network & Internet",
+    "de": "Netzwerk & Internet",
+    "es": "Red e Internet",
+    "zh": "网络和互联网",
+    "pt": "Rede e internet"
+  },
+  "quickDisplaySound": {
+    "en": "Display & Sound",
+    "de": "Bild & Ton",
+    "es": "Pantalla y sonido",
+    "zh": "显示和声音",
+    "pt": "Tela e som"
+  },
+  "quickScreensaver": {
+    "en": "Screensaver",
+    "de": "Bildschirmschoner",
+    "es": "Salvapantallas",
+    "zh": "屏幕保护程序",
+    "pt": "Protetor de tela"
+  },
+  "quickDateTime": {
+    "en": "Date & time",
+    "de": "Datum & Uhrzeit",
+    "es": "Fecha y hora",
+    "zh": "日期和时间",
+    "pt": "Data e hora"
+  },
+  "quickAllSettings": {
+    "en": "All settings",
+    "de": "Alle Einstellungen",
+    "es": "Todos los ajustes",
+    "zh": "所有设置",
+    "pt": "Todas as configurações"
+  },
+  "quickNotifications": {
+    "en": "Notifications",
+    "de": "Benachrichtigungen",
+    "es": "Notificaciones",
+    "zh": "通知",
+    "pt": "Notificações"
+  },
+  "quickNoNotifications": {
+    "en": "No notifications",
+    "de": "Keine Benachrichtigungen",
+    "es": "Sin notificaciones",
+    "zh": "没有通知",
+    "pt": "Nenhuma notificação"
+  },
+  "quickAllowNotifications": {
+    "en": "Show notifications here",
+    "de": "Benachrichtigungen hier zeigen",
+    "es": "Mostrar notificaciones aquí",
+    "zh": "在此显示通知",
+    "pt": "Mostrar notificações aqui"
+  },
+  "quickClearNotifications": {
+    "en": "Clear all",
+    "de": "Alle löschen",
+    "es": "Borrar todo",
+    "zh": "全部清除",
+    "pt": "Limpar todas"
+  },
+  "signalWeak": {
+    "en": "weak signal",
+    "de": "schwaches Signal",
+    "es": "señal débil",
+    "zh": "信号弱",
+    "pt": "sinal fraco"
+  },
+  "signalGood": {
+    "en": "good signal",
+    "de": "gutes Signal",
+    "es": "buena señal",
+    "zh": "信号良好",
+    "pt": "sinal bom"
+  },
+  "signalExcellent": {
+    "en": "excellent signal",
+    "de": "sehr gutes Signal",
+    "es": "señal excelente",
+    "zh": "信号极佳",
+    "pt": "sinal ótimo"
+  },
+  "networkEthernet": {
+    "en": "Ethernet",
+    "de": "Ethernet",
+    "es": "Ethernet",
+    "zh": "以太网",
+    "pt": "Cabo de rede"
+  },
+  "networkNone": {
+    "en": "Not connected",
+    "de": "Nicht verbunden",
+    "es": "Sin conexión",
+    "zh": "未连接",
+    "pt": "Sem conexão"
+  },
+  "uninstallApp": {
+    "en": "Uninstall",
+    "de": "Deinstallieren",
+    "es": "Desinstalar",
+    "zh": "卸载",
+    "pt": "Desinstalar"
   }
 }

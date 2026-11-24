@@ -47,6 +47,8 @@ pub enum Request {
     Root(Option<RootSet>),
     /// Which HDMI ports carry a picture right now.
     Signals,
+    /// Android TV: network and notifications for the quick settings panel.
+    Quick,
 }
 pub enum Response {
     Inventory(Result<(Inventory, Option<String>), String>),
@@ -55,6 +57,28 @@ pub enum Response {
     Root(Result<Option<RootStatus>, String>),
     /// (HDMI port number, picture present).
     Signals(Vec<(u8, bool)>),
+    Quick(QuickInfo),
+}
+
+/// Android TV quick settings: the connection and recent notifications.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct QuickInfo {
+    /// "wifi", "ethernet" or "none".
+    pub network: String,
+    /// Wi-Fi signal from 0 (weak) to 4.
+    pub signal: u8,
+    /// Luma has Notification access and can list notifications.
+    pub notifications_allowed: bool,
+    pub notices: Vec<Notice>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Notice {
+    /// The system's notification key, used to open it.
+    pub key: String,
+    pub app: String,
+    pub title: String,
+    pub text: String,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -93,6 +117,18 @@ fn app_inventory(webos: bool) -> Result<(Inventory, Option<String>), String> {
 }
 
 #[cfg(target_os = "android")]
+fn quick_info() -> QuickInfo {
+    crate::android::quick().unwrap_or_else(|error| {
+        eprintln!("Luma quick settings: {error}");
+        QuickInfo::default()
+    })
+}
+#[cfg(not(target_os = "android"))]
+fn quick_info() -> QuickInfo {
+    QuickInfo::default()
+}
+
+#[cfg(target_os = "android")]
 fn android_launch(id: &str) -> Option<Result<(), String>> {
     Some(crate::android::launch(id))
 }
@@ -109,6 +145,7 @@ impl Platform {
             while let Ok(request) = requests.recv() {
                 let response = match request {
                     Request::Refresh => Response::Inventory(app_inventory(webos)),
+                    Request::Quick => Response::Quick(quick_info()),
                     Request::Signals => Response::Signals(if webos {
                         hdmi_signals().unwrap_or_default()
                     } else {

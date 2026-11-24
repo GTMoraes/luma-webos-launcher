@@ -10,9 +10,17 @@ import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.Uri;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.provider.Settings;
+import android.service.notification.StatusBarNotification;
 import android.system.Os;
 import android.util.Log;
 import android.view.KeyEvent;
@@ -264,11 +272,27 @@ public class LumaActivity extends SDLActivity {
         }
     }
 
-    /** Opens an app by package, or an activity given as package/.Activity. */
+    /**
+     * Opens an app by package or an activity given as package/.Activity. Also:
+     * "action:" a settings page, "uninstall:" a package (the system asks first),
+     * "notification:" a notification by key, and "notifications:clear".
+     */
     public boolean lumaOpen(String target) {
         PackageManager pm = getPackageManager();
         Intent intent;
-        if (target.indexOf('/') > 0) {
+        if (target.startsWith("notification:")) {
+            return LumaNotifications.open(target.substring("notification:".length()));
+        } else if (target.equals("notifications:clear")) {
+            return LumaNotifications.clear();
+        } else if (target.startsWith("action:")) {
+            intent = new Intent(target.substring("action:".length()));
+            if (pm.resolveActivity(intent, 0) == null) {
+                intent = new Intent(Settings.ACTION_SETTINGS);
+            }
+        } else if (target.startsWith("uninstall:")) {
+            intent = new Intent(Intent.ACTION_DELETE,
+                    Uri.parse("package:" + target.substring("uninstall:".length())));
+        } else if (target.indexOf('/') > 0) {
             ComponentName component = ComponentName.unflattenFromString(target);
             if (component == null) {
                 return false;
@@ -296,5 +320,54 @@ public class LumaActivity extends SDLActivity {
             }
         });
         return true;
+    }
+
+    /** The connection and recent notifications for the quick settings panel, as JSON. */
+    public String lumaQuick() {
+        JSONObject reply = new JSONObject();
+        try {
+            String network = "none";
+            int signal = 0;
+            ConnectivityManager connectivity = getSystemService(ConnectivityManager.class);
+            Network active = connectivity == null ? null : connectivity.getActiveNetwork();
+            NetworkCapabilities caps =
+                    active == null ? null : connectivity.getNetworkCapabilities(active);
+            if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
+                network = "ethernet";
+            } else if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                network = "wifi";
+                WifiManager wifi = getSystemService(WifiManager.class);
+                WifiInfo info = wifi == null ? null : wifi.getConnectionInfo();
+                if (info != null) {
+                    signal = WifiManager.calculateSignalLevel(info.getRssi(), 5);
+                }
+            }
+            reply.put("network", network);
+            reply.put("signal", signal);
+            boolean allowed = LumaNotifications.allowed(this);
+            reply.put("allowed", allowed);
+            JSONArray notices = new JSONArray();
+            PackageManager pm = getPackageManager();
+            for (StatusBarNotification item : LumaNotifications.recent()) {
+                JSONObject notice = new JSONObject();
+                notice.put("key", item.getKey());
+                String app = item.getPackageName();
+                try {
+                    app = String.valueOf(pm.getApplicationLabel(pm.getApplicationInfo(app, 0)));
+                } catch (PackageManager.NameNotFoundException ignored) {
+                    // The package name stands in for its label.
+                }
+                notice.put("app", app);
+                CharSequence title = item.getNotification().extras.getCharSequence("android.title");
+                CharSequence text = item.getNotification().extras.getCharSequence("android.text");
+                notice.put("title", title == null ? "" : title.toString());
+                notice.put("text", text == null ? "" : text.toString());
+                notices.put(notice);
+            }
+            reply.put("notices", notices);
+        } catch (Exception e) {
+            Log.w(TAG, "Quick settings", e);
+        }
+        return reply.toString();
     }
 }

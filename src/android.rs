@@ -280,15 +280,37 @@ pub fn app_art(id: &str) -> Result<Vec<u8>, String> {
     .ok_or_else(|| format!("No artwork for {id}"))
 }
 
-/// Opens an app by package, or an activity given as `package/.Activity`.
-pub fn launch(target: &str) -> Result<(), String> {
+fn java_name(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 200
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'$'))
+}
+
+/// What `lumaOpen` accepts: a package, `package/.Activity`, `action:` with a
+/// settings action, `uninstall:` with a package, `notification:` with a
+/// notification key, or `notifications:clear`.
+fn valid_target(target: &str) -> bool {
+    if let Some(action) = target.strip_prefix("action:") {
+        return java_name(action);
+    }
+    if let Some(package) = target.strip_prefix("uninstall:") {
+        return valid_app_id(package);
+    }
+    if let Some(key) = target.strip_prefix("notification:") {
+        return !key.is_empty() && key.len() <= 400 && !key.chars().any(char::is_control);
+    }
+    if target == "notifications:clear" {
+        return true;
+    }
     let (package, activity) = target.split_once('/').unwrap_or((target, ""));
-    let activity_valid = activity.is_empty()
-        || (activity.len() <= 200
-            && activity
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'$')));
-    if !valid_app_id(package) || !activity_valid {
+    valid_app_id(package) && (activity.is_empty() || java_name(activity))
+}
+
+/// Opens an app or one of the targets described in `valid_target`.
+pub fn launch(target: &str) -> Result<(), String> {
+    if !valid_target(target) {
         return Err("Invalid application identifier".into());
     }
     let opened = with_activity(|env, activity| {
@@ -306,4 +328,65 @@ pub fn launch(target: &str) -> Result<(), String> {
     } else {
         Err(format!("Luma Android: {target} could not be opened"))
     }
+}
+
+#[derive(Deserialize)]
+struct QuickReply {
+    #[serde(default)]
+    network: String,
+    #[serde(default)]
+    signal: u8,
+    #[serde(default)]
+    allowed: bool,
+    #[serde(default)]
+    notices: Vec<NoticeReply>,
+}
+
+#[derive(Deserialize)]
+struct NoticeReply {
+    key: String,
+    #[serde(default)]
+    app: String,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    text: String,
+}
+
+/// The connection and recent notifications for the quick settings panel.
+pub fn quick() -> Result<crate::platform::QuickInfo, String> {
+    let json = with_activity(|env, activity| {
+        let value = env
+            .call_method(activity, "lumaQuick", "()Ljava/lang/String;", &[])?
+            .l()?;
+        let value = JString::from(value);
+        Ok(String::from(env.get_string(&value)?))
+    })?;
+    let reply: QuickReply =
+        serde_json::from_str(&json).map_err(|error| format!("Quick settings: {error}"))?;
+    let clean = |text: String, limit: usize| -> String {
+        text.chars()
+            .map(|c| if c.is_control() { ' ' } else { c })
+            .take(limit)
+            .collect::<String>()
+            .trim()
+            .to_owned()
+    };
+    Ok(crate::platform::QuickInfo {
+        network: reply.network,
+        signal: reply.signal.min(4),
+        notifications_allowed: reply.allowed,
+        notices: reply
+            .notices
+            .into_iter()
+            .filter(|notice| !notice.key.is_empty() && notice.key.len() <= 400)
+            .take(8)
+            .map(|notice| crate::platform::Notice {
+                key: notice.key,
+                app: clean(notice.app, 60),
+                title: clean(notice.title, 80),
+                text: clean(notice.text, 120),
+            })
+            .collect(),
+    })
 }
