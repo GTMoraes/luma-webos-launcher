@@ -46,6 +46,9 @@ SDL_LIB="$SDL_BUILD/libSDL2.so"
 rm -rf "$APP/java/org/libsdl"
 mkdir -p "$APP/java/org/libsdl"
 cp -R "$SDL_SOURCE/android-project/app/src/main/java/org/libsdl/app" "$APP/java/org/libsdl/"
+# The source is no longer needed. Removing it also keeps SDL's sample Gradle
+# wrapper out of the workspace, which setup-gradle would refuse as unknown.
+rm -rf "$SDL_SOURCE"
 
 # libluma.so: the launcher, linked against that SDL2.
 export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER="$CLANG"
