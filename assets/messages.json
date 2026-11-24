@@ -1223,5 +1223,26 @@
     "es": "Desinstalar",
     "zh": "卸载",
     "pt": "Desinstalar"
+  },
+  "mystifyAfter": {
+    "en": "Mystify after",
+    "de": "Mystify nach",
+    "es": "Mystify después de",
+    "zh": "Mystify 启动时间",
+    "pt": "Mystify após"
+  },
+  "minutesValue": {
+    "en": "{n} min",
+    "de": "{n} Min.",
+    "es": "{n} min",
+    "zh": "{n} 分钟",
+    "pt": "{n} min"
+  },
+  "mystifyAfterPermission": {
+    "en": "Allow with adb: appops set com.frx9.luma WRITE_SETTINGS allow",
+    "de": "Mit adb erlauben: appops set com.frx9.luma WRITE_SETTINGS allow",
+    "es": "Permitir con adb: appops set com.frx9.luma WRITE_SETTINGS allow",
+    "zh": "用 adb 允许：appops set com.frx9.luma WRITE_SETTINGS allow",
+    "pt": "Permita pelo adb: appops set com.frx9.luma WRITE_SETTINGS allow"
   }
 }

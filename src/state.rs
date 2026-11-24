@@ -51,6 +51,8 @@ pub const SECTION_ORDER: &[usize] = &[0, 1, 6, 2, 4, 5];
 const _: () = assert!(SECTION_ORDER.len() <= SECTION_COUNT);
 pub const APPS_COLUMNS: usize = 6;
 /// Android TV quick settings: settings rows, then at most this many notifications.
+/// Choices for "Mystify after" on Android TV, in minutes.
+pub const MYSTIFY_MINUTES: [u32; 4] = [3, 5, 10, 15];
 pub const QUICK_SETTINGS: usize = 6;
 pub const QUICK_NOTICES: usize = 4;
 pub const HOME_STRIP_LEFT: f32 = 84.;
@@ -4716,6 +4718,17 @@ impl State {
                         return vec![Effect::Root(Some(change))];
                     }
                     7 => return vec![Effect::Launch("com.webos.app.home".into())],
+                    11 => {
+                        // Android TV: minutes before Mystify (the screensaver) starts.
+                        let next = MYSTIFY_MINUTES
+                            .iter()
+                            .copied()
+                            .find(|m| *m > self.quick.timeout_minutes)
+                            .unwrap_or(MYSTIFY_MINUTES[0]);
+                        self.quick.timeout_minutes = next;
+                        self.dirty = true;
+                        return vec![Effect::Launch(format!("timeout:{next}")), Effect::Quick];
+                    }
                     8 => return vec![Effect::Launch("com.denisefremov.luma.aerials".into())],
                     6 => {
                         self.subpage = Some(Subpage::Greeting);

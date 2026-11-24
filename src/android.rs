@@ -304,6 +304,9 @@ fn valid_target(target: &str) -> bool {
     if target == "notifications:clear" {
         return true;
     }
+    if let Some(minutes) = target.strip_prefix("timeout:") {
+        return minutes.parse::<u32>().is_ok_and(|m| (1..=60).contains(&m));
+    }
     let (package, activity) = target.split_once('/').unwrap_or((target, ""));
     valid_app_id(package) && (activity.is_empty() || java_name(activity))
 }
@@ -340,6 +343,10 @@ struct QuickReply {
     allowed: bool,
     #[serde(default)]
     notices: Vec<NoticeReply>,
+    #[serde(default)]
+    timeout: u32,
+    #[serde(default)]
+    writable: bool,
 }
 
 #[derive(Deserialize)]
@@ -376,6 +383,8 @@ pub fn quick() -> Result<crate::platform::QuickInfo, String> {
         network: reply.network,
         signal: reply.signal.min(4),
         notifications_allowed: reply.allowed,
+        timeout_minutes: reply.timeout.min(1440),
+        timeout_writable: reply.writable,
         notices: reply
             .notices
             .into_iter()

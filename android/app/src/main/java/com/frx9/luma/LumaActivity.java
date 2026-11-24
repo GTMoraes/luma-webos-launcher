@@ -2,6 +2,7 @@ package com.frx9.luma;
 
 import android.content.ComponentName;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
@@ -70,6 +71,40 @@ public class LumaActivity extends SDLActivity {
             Log.e(TAG, "Luma could not prepare its files", e);
         }
         super.onCreate(state);
+        applyTimeout();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Google TV puts the screensaver time back to 10 minutes; Luma restores the choice.
+        applyTimeout();
+    }
+
+    private static final String TIMEOUT_KEY = "mystify_minutes";
+    private static final int TIMEOUT_DEFAULT = 5;
+
+    private int timeoutMinutes() {
+        return getSharedPreferences("luma", MODE_PRIVATE).getInt(TIMEOUT_KEY, TIMEOUT_DEFAULT);
+    }
+
+    /** Writes the chosen screensaver time, when Luma has WRITE_SETTINGS (granted by adb). */
+    private void applyTimeout() {
+        try {
+            if (!Settings.System.canWrite(this)) {
+                return;
+            }
+            int wanted = timeoutMinutes() * 60000;
+            int current = Settings.System.getInt(
+                    getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, -1);
+            if (current != wanted) {
+                Settings.System.putInt(
+                        getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, wanted);
+                Log.i(TAG, "Screensaver after " + timeoutMinutes() + " min (was " + current + " ms)");
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Could not set the screensaver time", e);
+        }
     }
 
     /**
@@ -284,6 +319,20 @@ public class LumaActivity extends SDLActivity {
             return LumaNotifications.open(target.substring("notification:".length()));
         } else if (target.equals("notifications:clear")) {
             return LumaNotifications.clear();
+        } else if (target.startsWith("timeout:")) {
+            int minutes;
+            try {
+                minutes = Integer.parseInt(target.substring("timeout:".length()));
+            } catch (NumberFormatException e) {
+                return false;
+            }
+            if (minutes < 1 || minutes > 60) {
+                return false;
+            }
+            SharedPreferences.Editor editor = getSharedPreferences("luma", MODE_PRIVATE).edit();
+            editor.putInt(TIMEOUT_KEY, minutes).commit();
+            applyTimeout();
+            return true;
         } else if (target.startsWith("action:")) {
             intent = new Intent(target.substring("action:".length()));
             if (pm.resolveActivity(intent, 0) == null) {
@@ -365,6 +414,16 @@ public class LumaActivity extends SDLActivity {
                 notices.put(notice);
             }
             reply.put("notices", notices);
+            boolean writable = Settings.System.canWrite(this);
+            reply.put("writable", writable);
+            int minutes = timeoutMinutes();
+            if (!writable) {
+                // Without permission, show what the system really uses.
+                int current = Settings.System.getInt(
+                        getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 0);
+                minutes = current / 60000;
+            }
+            reply.put("timeout", minutes);
         } catch (Exception e) {
             Log.w(TAG, "Quick settings", e);
         }

@@ -2998,12 +2998,29 @@ fn legacy_settings_body(out: &mut Scene, state: &State, assets: &Assets) {
                 (5, language.t("quitApp"), "power"),
                 (7, "Original LG Home", "tv"),
                 (8, "Video library · full screen", "tv"),
+                (11, language.t("mystifyAfter"), "clock"),
             ]
             .into_iter()
-            // The LG Home and the video library exist only on the TV.
-            .filter(|(index, _, _)| !cfg!(target_os = "android") || *index < 7)
+            // The LG Home and the video library exist only on the TV;
+            // "Mystify after" only on Android TV.
+            .filter(|(index, _, _)| {
+                if cfg!(target_os = "android") {
+                    *index < 7 || *index == 11
+                } else {
+                    *index != 11
+                }
+            })
             .enumerate()
             {
+                let timeout = index == 11;
+                let minutes = (timeout && state.quick.timeout_minutes > 0).then(|| {
+                    language.format(
+                        "minutesValue",
+                        &[("n", &state.quick.timeout_minutes.to_string())],
+                    )
+                });
+                let description = (timeout && !state.quick.timeout_writable)
+                    .then(|| language.t("mystifyAfterPermission"));
                 row(
                     out,
                     state,
@@ -3013,8 +3030,8 @@ fn legacy_settings_body(out: &mut Scene, state: &State, assets: &Assets) {
                         rect: Rect::new(640., 164.8 + position as f32 * 84. - s, 1120., 72.),
                         title,
                         icon: Some(icon),
-                        value: None,
-                        description: None,
+                        value: minutes.as_deref(),
+                        description,
                         selected: false,
                         chevron: false,
                     },

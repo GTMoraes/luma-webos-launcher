@@ -2344,7 +2344,11 @@ fn run_with(mut options: Options) -> Result<(), String> {
     let bitcoin_updates = if webos { Some(bitcoin_worker()) } else { None };
     let platform = Platform::new(webos);
     effects(
-        vec![Effect::Refresh, Effect::Root(None)],
+        if cfg!(target_os = "android") {
+            vec![Effect::Refresh, Effect::Root(None), Effect::Quick]
+        } else {
+            vec![Effect::Refresh, Effect::Root(None)]
+        },
         &mut state,
         &platform,
         &preferences_path,
@@ -3181,7 +3185,9 @@ fn run_with(mut options: Options) -> Result<(), String> {
                         if tv {
                             pending.push(Effect::Refresh);
                         }
-                        if matches!(state.overlay, Some(Overlay::Quick { .. })) {
+                        if cfg!(target_os = "android")
+                            || matches!(state.overlay, Some(Overlay::Quick { .. }))
+                        {
                             pending.push(Effect::Quick);
                         }
                         // Back from the web player: media has the new watch time.

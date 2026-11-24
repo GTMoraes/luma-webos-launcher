@@ -70,6 +70,10 @@ pub struct QuickInfo {
     /// Luma has Notification access and can list notifications.
     pub notifications_allowed: bool,
     pub notices: Vec<Notice>,
+    /// Minutes before the screensaver (Mystify) starts; 0 when unknown.
+    pub timeout_minutes: u32,
+    /// Luma may change the screensaver time (WRITE_SETTINGS granted).
+    pub timeout_writable: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
