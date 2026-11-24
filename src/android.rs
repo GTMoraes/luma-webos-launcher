@@ -46,6 +46,7 @@ struct Tm {
 #[unsafe(no_mangle)]
 pub extern "C" fn SDL_main(_argc: c_int, _argv: *const *const c_char) -> c_int {
     log_to_file();
+    prepare_storage();
     let code = match arguments().and_then(|args| crate::Options::parse_from(args.into_iter())) {
         Ok(options) => match crate::run_with(options) {
             Ok(()) => 0,
@@ -80,15 +81,45 @@ fn arguments() -> Result<Vec<String>, String> {
     ])
 }
 
-/// The app's shared folder (`/sdcard/Android/data/com.frx9.luma/files`),
-/// reachable with adb like Mystify's configuration.
+/// The settings live in the app's private folder (`/data/data/com.frx9.luma/files`),
+/// always ready when Luma starts; see `storage::prepare_private`.
 pub fn preferences_path() -> Result<PathBuf, String> {
-    Ok(folder("LUMA_DATA")?.join("preferences.json"))
+    Ok(folder("LUMA_PRIVATE")?.join("preferences.json"))
+}
+
+/// The app's shared folder (`/sdcard/Android/data/com.frx9.luma/files`),
+/// reachable with adb: log, a copy of the settings and the import slots.
+/// LumaActivity falls back to the private folder in LUMA_DATA when the shared
+/// storage is not mounted yet (cold boot); then there is none this time.
+fn shared_folder() -> Option<PathBuf> {
+    let shared = folder("LUMA_DATA").ok()?;
+    let private = folder("LUMA_PRIVATE").ok()?;
+    (shared != private && shared.is_dir()).then_some(shared)
+}
+
+fn prepare_storage() {
+    let Ok(private) = folder("LUMA_PRIVATE") else {
+        eprintln!("Luma storage: LUMA_PRIVATE was not set by LumaActivity");
+        return;
+    };
+    let shared = shared_folder();
+    for note in crate::storage::prepare_private(&private, shared.as_deref()) {
+        eprintln!("Luma storage: {note}");
+    }
+}
+
+/// After every save of the settings, a copy goes to the shared folder.
+pub fn after_save(saved: &Path) {
+    if preferences_path().is_ok_and(|main| main.as_path() == saved)
+        && let Some(shared) = shared_folder()
+    {
+        crate::storage::mirror(saved, &shared);
+    }
 }
 
 /// Home Assistant credentials stay in the app's private storage. A copy of
-/// the TV's `ha-auth.json` pushed next to the preferences is imported once
-/// and then removed from the shared folder.
+/// the TV's `ha-auth.json` pushed to the shared folder is imported once and
+/// then removed from there.
 pub fn auth_path(preferences: &Path) -> PathBuf {
     let private = folder("LUMA_PRIVATE").unwrap_or_else(|_| {
         preferences
@@ -97,7 +128,9 @@ pub fn auth_path(preferences: &Path) -> PathBuf {
             .unwrap_or_default()
     });
     let path = private.join("ha-auth.json");
-    let pushed = preferences.with_file_name("ha-auth.json");
+    let Some(pushed) = shared_folder().map(|shared| shared.join("ha-auth.json")) else {
+        return path;
+    };
     if pushed != path && pushed.is_file() {
         match std::fs::read(&pushed)
             .ok()

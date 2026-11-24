@@ -57,15 +57,26 @@ Baixe o artefato `luma-android-N` da execução do workflow Android e:
 
 ## Arquivos no aparelho
 
+As preferências ficam na área privada do app (`/data/data/com.frx9.luma/files/`), que está
+sempre pronta quando o Luma abre. A pasta compartilhada pode ainda não estar montada logo
+depois de ligar o Chromecast: em 24/11/2026 o Luma abriu com o padrão depois de um boot frio,
+quando as preferências moravam lá. Na primeira abertura desta versão com a pasta compartilhada
+disponível, o `preferences.json` dela (com o cache do clima e os ícones) é movido para a área
+privada, por cima de qualquer arquivo que já estivesse lá.
+
 Na pasta `/sdcard/Android/data/com.frx9.luma/files/`:
 
-- `preferences.json`: as preferências, no mesmo formato da TV.
-- `luma.log`: o log (o anterior vira `luma.log.1` depois de 1 MiB).
+- `preferences.json`: cópia das preferências, gravada a cada mudança (backup; o Luma não lê).
+- `preferences-importar.json`: se colocado aqui, substitui as preferências na próxima abertura
+  e é apagado. Arquivo que o Luma não consegue ler fica, e o motivo vai para o log.
+- `luma.log`: o log (o anterior vira `luma.log.1` depois de 1 MiB). Sem a pasta pronta no boot,
+  o log daquela abertura vai para a área privada.
 - `ha-auth.json`: se colocado aqui, a credencial do Home Assistant é importada na próxima abertura
   e o arquivo é apagado desta pasta; ela fica na área privada do app.
 
 ```powershell
+& $A pull /sdcard/Android/data/com.frx9.luma/files/preferences.json
+& $A push preferences.json /sdcard/Android/data/com.frx9.luma/files/preferences-importar.json
 & $A shell am force-stop com.frx9.luma
-& $A push preferences.json /sdcard/Android/data/com.frx9.luma/files/preferences.json
 & $A shell cat /sdcard/Android/data/com.frx9.luma/files/luma.log
 ```
