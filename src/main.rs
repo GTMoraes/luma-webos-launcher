@@ -1898,6 +1898,12 @@ fn run_with(mut options: Options) -> Result<(), String> {
         storage::load(&preferences_path)?
     };
     let mut state = State::new(initial_preferences);
+    // A different Home phrase on each start (a fixed preview clock keeps the classic one).
+    if options.time.is_none() {
+        state.greeting_turn = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.subsec_micros());
+    }
     let _ = moonlight_service();
     // Desktop game-card mockup and game Home row, using synthetic preview entries.
     #[cfg(debug_assertions)]
@@ -3170,6 +3176,10 @@ fn run_with(mut options: Options) -> Result<(), String> {
                     }
                     WindowEvent::FocusLost => press = None,
                     WindowEvent::Shown | WindowEvent::Restored | WindowEvent::FocusGained => {
+                        // Back from an app or the screensaver: the next Home phrase.
+                        if !visible {
+                            state.greeting_turn = state.greeting_turn.wrapping_add(1);
+                        }
                         visible = true;
                         state.dirty = true;
                         // Double Start+Select on a TV gamepad (pad_watch): close the game.

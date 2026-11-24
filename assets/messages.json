@@ -1244,5 +1244,33 @@
     "es": "Permitir con adb: appops set com.frx9.luma WRITE_SETTINGS allow",
     "zh": "用 adb 允许：appops set com.frx9.luma WRITE_SETTINGS allow",
     "pt": "Permita pelo adb: appops set com.frx9.luma WRITE_SETTINGS allow"
+  },
+  "greetingsNight": {
+    "en": "One more episode?|Night owl session.|Midnight movie?|The house sleeps, the screen doesn't.|Popcorn insomnia?",
+    "de": "Noch eine Folge?|Kino für Nachteulen.|Ein Mitternachtsfilm?|Das Haus schläft, der Bildschirm nicht.|Schlaflos mit Popcorn?",
+    "es": "¿Un episodio más?|Sesión de trasnoche.|¿Cine de madrugada?|La casa duerme, la pantalla no.|¿Insomnio con palomitas?",
+    "zh": "再看一集？|夜猫子影院。|来部午夜电影？|家已入睡，屏幕还亮着。|失眠配爆米花？",
+    "pt": "Só mais um episódio?|Sessão coruja.|Cinema de madrugada?|A casa dorme, a tela não.|Insônia com pipoca?"
+  },
+  "greetingsMorning": {
+    "en": "Coffee and an episode?|Cartoons with coffee?|A slow morning?|Something light to start?",
+    "de": "Kaffee und eine Folge?|Cartoons zum Kaffee?|Ein ruhiger Morgen?|Etwas Leichtes zum Start?",
+    "es": "¿Café y un episodio?|¿Dibujos con café?|¿Mañana sin prisa?|¿Algo ligero para empezar?",
+    "zh": "咖啡配一集？|边喝咖啡边看动画？|悠闲的早晨？|来点轻松的开场？",
+    "pt": "Café e um episódio?|Desenho com café?|Manhã sem pressa?|Algo leve pra começar?"
+  },
+  "greetingsAfternoon": {
+    "en": "Matinee time?|A break for a movie?|Afternoon marathon?|A documentary, maybe?",
+    "de": "Zeit für eine Matinee?|Pause für einen Film?|Ein Serienmarathon?|Vielleicht eine Doku?",
+    "es": "¿Matiné?|¿Pausa para una peli?|¿Tarde de maratón?|¿Un documental, quizás?",
+    "zh": "下午场电影？|休息一下，看部电影？|下午追剧？|来部纪录片？",
+    "pt": "Sessão da tarde?|Pausa pra um filme?|Tarde de maratona?|Um documentário, talvez?"
+  },
+  "greetingsEvening": {
+    "en": "Popcorn ready?|What are we watching tonight?|Lights low, screen on.|Couch and a good movie?|Series time?",
+    "de": "Popcorn bereit?|Was schauen wir heute?|Licht aus, Bildschirm an.|Sofa und ein guter Film?|Zeit für die Serie?",
+    "es": "¿Palomitas listas?|¿Qué vemos hoy?|Luz baja, pantalla encendida.|¿Sofá y una buena peli?|¿Hora de la serie?",
+    "zh": "爆米花准备好了？|今晚看什么？|灯光调暗，屏幕点亮。|沙发配好电影？|追剧时间到？",
+    "pt": "Pipoca pronta?|O que vamos ver hoje?|Luz baixa, tela acesa.|Sofá e um bom filme?|Hora da série?"
   }
 }

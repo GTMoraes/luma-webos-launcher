@@ -569,6 +569,8 @@ pub struct State {
     pub overlay: Option<Overlay>,
     /// Android TV quick settings: connection and notifications.
     pub quick: crate::platform::QuickInfo,
+    /// Which Home greeting phrase shows; moves on when Luma comes back.
+    pub greeting_turn: u32,
     pub moving: Option<String>,
     pub loading: bool,
     /// Set by Refresh apps: the next inventory also reloads every app icon.
@@ -762,6 +764,7 @@ impl State {
             first_home: true,
             overlay: None,
             quick: crate::platform::QuickInfo::default(),
+            greeting_turn: 0,
             moving: None,
             loading: false,
             reload_artwork: false,

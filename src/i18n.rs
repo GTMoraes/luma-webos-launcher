@@ -96,6 +96,27 @@ impl Language {
             self.format(&format!("{key}Named"), &[("name", name)])
         }
     }
+    /// The Home headline: the classic greeting or one of the phrases for that
+    /// part of the day. `turn` picks the variation and moves on each time Luma
+    /// comes back to the front.
+    pub fn greeting_turn(self, hour: u8, name: &str, turn: u32) -> String {
+        let key = match hour {
+            0..=4 => "greetingsNight",
+            5..=11 => "greetingsMorning",
+            12..=17 => "greetingsAfternoon",
+            _ => "greetingsEvening",
+        };
+        let phrases: Vec<&str> = self
+            .t(key)
+            .split('|')
+            .map(str::trim)
+            .filter(|phrase| !phrase.is_empty() && *phrase != key)
+            .collect();
+        match turn as usize % (phrases.len() + 1) {
+            0 => self.greeting(hour, name),
+            index => phrases[index - 1].to_owned(),
+        }
+    }
     pub fn date(self, now: OffsetDateTime) -> String {
         let weekday = now.weekday().number_days_from_monday() as usize;
         let month = now.month() as usize - 1;
@@ -334,6 +355,28 @@ mod tests {
         assert_eq!(Language::En.greeting(15, "  Ana "), "Good afternoon, Ana.");
         assert_eq!(Language::Es.greeting(2, "Ana"), "¿Aún despiertos, Ana?");
         assert_eq!(Language::Zh.greeting(20, "小明"), "小明，晚上好。");
+        // Turn 0 is the classic greeting; the others walk the phrases and wrap.
+        assert_eq!(Language::En.greeting_turn(15, "", 0), "Good afternoon.");
+        for language in Language::ALL {
+            for hour in [2, 9, 15, 21] {
+                let phrases = language.t(match hour {
+                    2 => "greetingsNight",
+                    9 => "greetingsMorning",
+                    15 => "greetingsAfternoon",
+                    _ => "greetingsEvening",
+                });
+                let count = phrases.split('|').count() as u32;
+                assert!(count >= 3, "{language:?} {hour}");
+                assert_eq!(
+                    language.greeting_turn(hour, "", 1),
+                    phrases.split('|').next().unwrap()
+                );
+                assert_eq!(
+                    language.greeting_turn(hour, "", count + 1),
+                    language.greeting(hour, "")
+                );
+            }
+        }
     }
     #[test]
     fn clock_and_date_follow_the_selected_locale() {

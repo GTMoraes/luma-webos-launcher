@@ -1958,13 +1958,56 @@ const GLASS_PLAIN: f32 = 0.66;
 const PHRASE_TOP: f32 = 268.;
 const PHRASE_W: f32 = 1140.;
 
+/// The greeting or a phrase for the time of day, on up to two lines. Returns
+/// the bottom of the text, which the caption and Favorites follow.
+fn plain_greeting(
+    out: &mut Scene,
+    state: &State,
+    assets: &Assets,
+    now: OffsetDateTime,
+    top: f32,
+    style: TextStyle,
+) -> f32 {
+    let greeting = state.preferences.language.greeting_turn(
+        now.hour(),
+        &state.preferences.greeting_name,
+        state.greeting_turn,
+    );
+    let width = widgets_view::phrase_width(state);
+    // Shrink only when two lines are not enough.
+    let mut style = style;
+    let base = style.size;
+    while assets.lines(&greeting, style, width) > 2 && style.size > base * 0.72 {
+        style.size -= 2.;
+    }
+    let one = style.size * style.line_height;
+    let two = assets.lines(&greeting, style, width) >= 2;
+    let mut top = top;
+    if two {
+        // The renderer steps lines by size × leading; follow the heading font's real
+        // size so the lines do not touch, and keep the first line where it was.
+        let scale = assets.active_heading.get().scale() * assets.heading_pct.get() as f32 / 100.;
+        style = style.leading(style.line_height * scale.max(1.));
+        top -= (style.size * style.line_height - one) / 2.;
+    }
+    let line = style.size * style.line_height;
+    out.text(
+        &greeting,
+        Rect::new(84., top, width, line * 2. + 2.),
+        style,
+        WHITE,
+        false,
+    );
+    top + 110. + if two { line + (line - one) / 2. } else { 0. }
+}
+
 fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     let language = state.preferences.language;
     let s = state.scroll + state.bounce_at(crate::state::BounceAxis::Page) - HOME_DROP;
     // Weather gets a distinct TV-sized widget instead of reducing the greeting.
     let shift = 0.0f32;
     let greeting_start = out.draw.len();
-    let mut greeting_bottom = 0.0f32;
+    let mut greeting_bottom: f32;
     let mut greeting_width = 900.0f32;
     if state.preferences.greeting_style == crate::weather_phrases::GreetingStyle::Rude {
         if let Some(phrase) = &state.rude_weather.current {
@@ -2019,33 +2062,23 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
                 },
             );
         } else {
-            let greeting = language.greeting(now.hour(), &state.preferences.greeting_name);
-            out.text(
-                &greeting,
-                Rect::new(
-                    84.,
-                    PHRASE_TOP - shift - s,
-                    widgets_view::phrase_width(state),
-                    109.,
-                ),
+            greeting_bottom = plain_greeting(
+                out,
+                state,
+                assets,
+                now,
+                PHRASE_TOP - shift - s,
                 text(99., 550, -0.055).display(true).leading(1.05),
-                WHITE,
-                false,
             );
         }
     } else {
-        let greeting = language.greeting(now.hour(), &state.preferences.greeting_name);
-        out.text(
-            &greeting,
-            Rect::new(
-                84.,
-                PHRASE_TOP - shift - s,
-                widgets_view::phrase_width(state),
-                95.,
-            ),
+        greeting_bottom = plain_greeting(
+            out,
+            state,
+            assets,
+            now,
+            PHRASE_TOP - shift - s,
             text(90.4, 500, -0.065).display(true).leading(1.05),
-            WHITE,
-            false,
         );
     }
     if greeting_bottom <= 0. {
