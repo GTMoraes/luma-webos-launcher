@@ -83,7 +83,12 @@ pub(super) fn preview(
     let (name, detail): (String, String) = match page {
         None | Some(P::Root) => (
             "Widgets".into(),
-            "Weather, crypto, HDMI and Smart Home on Home".into(),
+            if cfg!(target_os = "android") {
+                "Weather and Smart Home on Home"
+            } else {
+                "Weather, crypto, HDMI and Smart Home on Home"
+            }
+            .into(),
         ),
         Some(P::Add) => {
             let (kind, size) = state.widget_add;

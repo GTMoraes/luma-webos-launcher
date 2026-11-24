@@ -31,6 +31,16 @@ fn row(label: impl Into<String>, value: Option<String>, chevron: bool, checked: 
 }
 /// The Root page shows a WIDGET SETTINGS heading before this row.
 pub const ROOT_SETTINGS_FROM: usize = 3;
+/// Root page rows by their action: 0 layout, 1 text line, 2 add, 3 weather,
+/// 4 crypto, 5 HDMI, 6 Smart Home. Android TV has no crypto feed or inputs.
+#[cfg(not(target_os = "android"))]
+const ROOT_ROWS: &[usize] = &[0, 1, 2, 3, 4, 5, 6];
+#[cfg(target_os = "android")]
+const ROOT_ROWS: &[usize] = &[0, 1, 2, 3, 6];
+/// Where a Root action sits in this build's list.
+fn root_row(action: usize) -> usize {
+    ROOT_ROWS.iter().position(|&a| a == action).unwrap_or(0)
+}
 
 pub fn input_live(input: &Input) -> bool {
     input.signal.unwrap_or(input.connected.unwrap_or(false))
@@ -607,11 +617,11 @@ impl State {
                 self.settings_pop(SettingsLevel::Root, Target::Sidebar(WEATHER_SECTION));
                 return Some(vec![]);
             }
-            P::Text => (P::Root, 1),
-            P::Add => (P::Root, 2),
-            P::Crypto => (P::Root, 4),
-            P::Hdmi => (P::Root, 5),
-            P::Smart => (P::Root, 6),
+            P::Text => (P::Root, root_row(1)),
+            P::Add => (P::Root, root_row(2)),
+            P::Crypto => (P::Root, root_row(4)),
+            P::Hdmi => (P::Root, root_row(5)),
+            P::Smart => (P::Root, root_row(6)),
             P::Exchange => (P::Crypto, 0),
             P::Coins => (P::Crypto, 1),
             P::MainCoin => (P::Crypto, 2),
@@ -767,7 +777,7 @@ impl State {
                         smart_devices(self).len()
                     )
                 };
-                vec![
+                [
                     row("Edit layout on Home", Some(layout), true, false),
                     row(
                         "Text line",
@@ -794,16 +804,21 @@ impl State {
                     row("HDMI input", Some(hdmi), true, false),
                     row("Smart Home", Some(smart), true, false),
                 ]
+                .into_iter()
+                .enumerate()
+                .filter(|(action, _)| ROOT_ROWS.contains(action))
+                .map(|(_, row)| row)
+                .collect()
             }
             P::Add => {
-                let mut rows: Vec<Row> = Kind::ALL
+                let mut rows: Vec<Row> = Kind::AVAILABLE
                     .iter()
                     .map(|k| check(k.title(), self.widget_add.0 == *k))
                     .collect();
                 rows.push(row("Add to Home", None, false, false));
                 rows
             }
-            P::Text => [Kind::Weather, Kind::Crypto, Kind::Smart]
+            P::Text => Kind::TEXT
                 .iter()
                 .map(|k| {
                     let mut r = check(k.title(), prefs.text.contains(k));
@@ -1034,14 +1049,14 @@ impl State {
         };
         let prefs = &mut self.preferences.widgets;
         match page {
-            P::Root => match i {
+            P::Root => match ROOT_ROWS.get(i).copied().unwrap_or(usize::MAX) {
                 0 => {
                     self.widget_enter_edit();
                     vec![]
                 }
                 1 => push(self, P::Text, 0),
                 2 => {
-                    let first = Kind::ALL
+                    let first = Kind::AVAILABLE
                         .iter()
                         .copied()
                         .find(|k| k.sizes().iter().any(|s| self.widget_add_allowed(*k, *s)))
@@ -1066,7 +1081,7 @@ impl State {
                 _ => vec![],
             },
             P::Add => {
-                if let Some(kind) = Kind::ALL.get(i) {
+                if let Some(kind) = Kind::AVAILABLE.get(i) {
                     self.widget_add.0 = *kind;
                     if !self.widget_add_allowed(*kind, self.widget_add.1) {
                         self.widget_add.1 = kind
@@ -1112,7 +1127,7 @@ impl State {
                 self.widget_save()
             }
             P::Text => {
-                let kind = [Kind::Weather, Kind::Crypto, Kind::Smart][i.min(2)];
+                let kind = Kind::TEXT[i.min(Kind::TEXT.len() - 1)];
                 if let Some(at) = prefs.text.iter().position(|k| *k == kind) {
                     prefs.text.remove(at);
                 } else if prefs.text.len() < TEXT_MAX {

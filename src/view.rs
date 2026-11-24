@@ -2997,6 +2997,8 @@ fn legacy_settings_body(out: &mut Scene, state: &State, assets: &Assets) {
                 (8, "Video library · full screen", "tv"),
             ]
             .into_iter()
+            // The LG Home and the video library exist only on the TV.
+            .filter(|(index, _, _)| !cfg!(target_os = "android") || *index < 7)
             .enumerate()
             {
                 row(

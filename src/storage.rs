@@ -4,6 +4,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Android TV: the app's shared folder, set by LumaActivity.
+#[cfg(target_os = "android")]
+pub fn default_path(_webos: bool) -> Result<PathBuf, String> {
+    crate::android::preferences_path()
+}
+
+#[cfg(not(target_os = "android"))]
 pub fn default_path(webos: bool) -> Result<PathBuf, String> {
     if webos {
         #[cfg(all(feature = "webos", unix))]

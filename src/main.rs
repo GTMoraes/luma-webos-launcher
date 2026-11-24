@@ -1,4 +1,6 @@
 mod aerial_video;
+#[cfg(target_os = "android")]
+mod android;
 mod app_artwork;
 mod branding;
 mod diagnostics;
@@ -87,9 +89,15 @@ struct Options {
 }
 
 impl Options {
+    #[cfg_attr(target_os = "android", allow(dead_code))]
     fn parse() -> Result<Self, String> {
+        Self::parse_from(std::env::args().skip(1))
+    }
+
+    /// Android passes its arguments from `SDL_main` (android.rs).
+    fn parse_from(args: impl Iterator<Item = String>) -> Result<Self, String> {
         let mut result = Self::default();
-        let mut args = std::env::args().skip(1).peekable();
+        let mut args = args.peekable();
         // SAM/jailer puts native launch metadata (e.g. @system_native_app and
         // nid) in argv[1]. It is not a Luma CLI option. Keep the original argv
         // intact for SDL/libhelpers, which also read the process launch data.
@@ -264,7 +272,7 @@ fn effects(
                     continue;
                 }
                 if !state.launching {
-                    if platform.webos {
+                    if platform.webos || platform.android {
                         state.launching = true;
                         platform.send(Request::Launch(id));
                     } else {
@@ -759,6 +767,7 @@ fn bitcoin_worker() -> std::sync::mpsc::Receiver<Option<String>> {
     receiver
 }
 
+#[cfg_attr(target_os = "android", allow(dead_code))]
 fn main() {
     if std::env::args().nth(1).as_deref() == Some("--pad-watch") {
         pad_watch::run();
@@ -1649,8 +1658,7 @@ fn weather_tick(
     } else {
         None
     };
-    let local =
-        time::OffsetDateTime::now_local().unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+    let local = local_now();
     let previous_phrase = state.rude_weather.current.clone();
     let saved = state.rude_weather.sync(
         &mut state.preferences,
@@ -1784,12 +1792,40 @@ fn scripted_click(
 /// (visible, fullscreen camera, live cameras, hidden cameras) last sent to Smart Home.
 type HaView = (bool, Option<String>, Vec<String>, Vec<String>);
 
+#[cfg_attr(target_os = "android", allow(dead_code))]
 fn run() -> Result<(), String> {
+    run_with(Options::parse()?)
+}
+
+/// The local time, for code that has no frame clock at hand.
+#[cfg(target_os = "android")]
+fn local_now() -> OffsetDateTime {
+    OffsetDateTime::now_utc().to_offset(android::local_offset())
+}
+#[cfg(not(target_os = "android"))]
+fn local_now() -> OffsetDateTime {
+    OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc())
+}
+
+/// The TV keeps the offset read at startup; Android follows time zone changes.
+#[cfg(target_os = "android")]
+fn current_offset(_startup: time::UtcOffset) -> time::UtcOffset {
+    android::local_offset()
+}
+#[cfg(not(target_os = "android"))]
+fn current_offset(startup: time::UtcOffset) -> time::UtcOffset {
+    startup
+}
+
+fn run_with(mut options: Options) -> Result<(), String> {
     let startup = Instant::now();
-    let mut options = Options::parse()?;
     let webos = cfg!(feature = "webos");
+    // Android TV shares the TV presentation (GLES 2, full screen 1080p canvas)
+    // but none of the webOS services.
+    let android = cfg!(target_os = "android");
+    let tv = webos || android;
     let startup_stage = |stage: &str| {
-        if webos {
+        if tv {
             eprintln!(
                 "Luma startup: {stage} after {} ms",
                 startup.elapsed().as_millis()
@@ -1819,6 +1855,9 @@ fn run() -> Result<(), String> {
         sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_BACK", "true");
     }
     // Resolve the local offset before artwork, HTTP or platform workers start.
+    #[cfg(target_os = "android")]
+    let local_offset = android::local_offset();
+    #[cfg(not(target_os = "android"))]
     let local_offset = OffsetDateTime::now_local()
         .map(|now| now.offset())
         .unwrap_or(time::UtcOffset::UTC);
@@ -1831,7 +1870,7 @@ fn run() -> Result<(), String> {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".build/assets")
         }
     });
-    let assets = view::Assets::load(root, webos)?;
+    let assets = view::Assets::load(root, tv)?;
     startup_stage("asset metadata");
     let default_preferences = options
         .preferences
@@ -2291,10 +2330,12 @@ fn run() -> Result<(), String> {
         weather_service::Client::new(options.weather_test_server.as_deref())?,
         weather_cache,
     );
-    let home_service = smart_home::Service::new(
-        smart_home::auth_path(&preferences_path),
-        state.preferences.smart_home.server_url.clone(),
-    );
+    #[cfg(target_os = "android")]
+    let auth_path = android::auth_path(&preferences_path);
+    #[cfg(not(target_os = "android"))]
+    let auth_path = smart_home::auth_path(&preferences_path);
+    let home_service =
+        smart_home::Service::new(auth_path, state.preferences.smart_home.server_url.clone());
     let bitcoin_updates = if webos { Some(bitcoin_worker()) } else { None };
     let platform = Platform::new(webos);
     effects(
@@ -2311,6 +2352,12 @@ fn run() -> Result<(), String> {
         // Ask EGL and Wayland compositor to preserve per-pixel alpha.
         sdl2::hint::set("SDL_VIDEO_EGL_ALLOW_TRANSPARENCY", "1");
         sdl2::hint::set("SDL_VIDEO_ALLOW_SCREENSAVER", "1");
+    }
+    if android {
+        // Let the system screensaver (Mystify) start over Luma, and keep Back
+        // in Luma: SDLActivity would otherwise close the activity.
+        sdl2::hint::set("SDL_VIDEO_ALLOW_SCREENSAVER", "1");
+        sdl2::hint::set("SDL_ANDROID_TRAP_BACK_BUTTON", "1");
     }
     let sdl = sdl2::init()?;
     let drivers: Vec<_> = sdl2::video::drivers().collect();
@@ -2333,7 +2380,7 @@ fn run() -> Result<(), String> {
     eprintln!("Luma SDL video driver: {}", video.current_video_driver());
     startup_stage("SDL video");
     let attributes = video.gl_attr();
-    if webos {
+    if tv {
         attributes.set_context_profile(GLProfile::GLES);
         attributes.set_context_version(2, 0);
     } else {
@@ -2346,13 +2393,19 @@ fn run() -> Result<(), String> {
     attributes.set_stencil_size(0);
     let requested = options.resolution.unwrap_or(if webos {
         state.preferences.resolved_ui_size()
+    } else if android {
+        // The Chromecast composes its UI at 1080p and scales it to the panel.
+        Size::HD
     } else {
         Size::new(1280, 720)
     });
     let create_window = || {
         let mut builder = video.window("Luma", requested.width, requested.height);
         builder.opengl().allow_highdpi().position_centered();
-        if options.fullscreen || (webos && options.resolution.is_none() && !requested.is_4k()) {
+        if options.fullscreen
+            || android
+            || (webos && options.resolution.is_none() && !requested.is_4k())
+        {
             builder.fullscreen_desktop();
         } else if webos {
             builder.borderless();
@@ -2387,7 +2440,7 @@ fn run() -> Result<(), String> {
     }
     let (mut window, _context) = opened.ok_or_else(|| failures.join("; "))?;
     gl::load_with(|name| video.gl_get_proc_address(name) as *const _);
-    if !webos {
+    if !tv {
         unsafe { gl::Enable(gl::MULTISAMPLE) };
     }
     let mut samples = 0;
@@ -2410,7 +2463,7 @@ fn run() -> Result<(), String> {
     if let Err(error) = video.gl_set_swap_interval(1) {
         eprintln!("VSync: {error}");
     }
-    let mut renderer = renderer::Renderer::new(&assets.root.join("font.ttf"), webos)?;
+    let mut renderer = renderer::Renderer::new(&assets.root.join("font.ttf"), tv)?;
     renderer.set_fonts(
         state.preferences.heading_font,
         state.preferences.text_font,
@@ -2540,7 +2593,7 @@ fn run() -> Result<(), String> {
         }
         let now = options
             .time
-            .unwrap_or_else(|| OffsetDateTime::now_utc().to_offset(local_offset));
+            .unwrap_or_else(|| OffsetDateTime::now_utc().to_offset(current_offset(local_offset)));
         // Redraw once per minute, or once per second while seconds are shown.
         let clock_slot = if state.preferences.show_seconds {
             now.unix_timestamp()
@@ -3107,7 +3160,7 @@ fn run() -> Result<(), String> {
                                 state.preferences.moonlight.clone(),
                             ));
                         }
-                        if webos {
+                        if tv {
                             pending.push(Effect::Refresh);
                         }
                         // Back from the web player: media has the new watch time.
@@ -3704,7 +3757,11 @@ fn run() -> Result<(), String> {
         let keyboard = state.text_input_active();
         if keyboard != text_active {
             if keyboard {
-                video.text_input().start();
+                // Android uses Luma's own remote keyboard; SDL would open the
+                // system keyboard over it.
+                if !android {
+                    video.text_input().start();
+                }
             } else {
                 video.text_input().stop();
             }
@@ -3936,7 +3993,7 @@ fn run() -> Result<(), String> {
                 prior_present = Some(present_at);
                 if presented == 0 {
                     startup_stage("first frame");
-                    if webos {
+                    if tv {
                         let stats = renderer.stats();
                         eprintln!(
                             "Luma vector text: {} glyphs, {} text runs, {} KiB glyph geometry, {} KiB GPU text",

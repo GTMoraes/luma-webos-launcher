@@ -51,7 +51,8 @@ fn width(assets: &Assets, value: &str, style: TextStyle) -> f32 {
 pub(super) fn available(state: &State, kind: Kind) -> bool {
     match kind {
         Kind::Weather => state.preferences.show_weather,
-        Kind::Crypto => true,
+        // Android TV has no crypto feed (bitcoin_worker is webOS-only).
+        Kind::Crypto => !cfg!(target_os = "android"),
         Kind::Hdmi => !state.inventory.inputs.is_empty(),
         Kind::Smart => !state.preferences.smart_home.server_url.is_empty(),
     }

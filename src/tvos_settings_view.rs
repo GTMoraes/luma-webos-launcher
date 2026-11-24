@@ -500,10 +500,19 @@ fn root(out: &mut Scene, state: &State, assets: &Assets) {
         "Appearance",
         "Stacks",
     ];
+    let android = cfg!(target_os = "android");
     let hints = [
         "Language, clock and motion",
-        "Video wallpaper collection",
-        "Weather, crypto, HDMI and Smart Home on Home",
+        if android {
+            "Photo wallpapers"
+        } else {
+            "Video wallpaper collection"
+        },
+        if android {
+            "Weather and Smart Home on Home"
+        } else {
+            "Weather, crypto, HDMI and Smart Home on Home"
+        },
         "Connected HDMI devices",
         "Home Assistant devices",
         "Device and launcher controls",

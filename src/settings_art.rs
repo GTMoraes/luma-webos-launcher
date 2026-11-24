@@ -310,6 +310,20 @@ pub(super) fn draw(out: &mut Scene, state: &State, assets: &Assets, art: Art, st
 /// Three wallpaper stills shared by Wallpaper and Stacks, so both scenes reuse
 /// the same textures.
 fn stills(state: &State, assets: &Assets) -> [String; 3] {
+    if cfg!(target_os = "android") {
+        // No video wallpapers on Android: the current photo and the next two.
+        use crate::model::BACKGROUNDS;
+        let first = BACKGROUNDS
+            .iter()
+            .position(|(id, _)| *id == state.preferences.background)
+            .unwrap_or(0);
+        return [0, 1, 2].map(|step| {
+            assets.path(format!(
+                "thumbnails/{}.jpg",
+                BACKGROUNDS[(first + step) % BACKGROUNDS.len()].0
+            ))
+        });
+    }
     let n = crate::video_catalog::all().len().max(1);
     let first = state.preferences.video_index.min(n - 1);
     [0, 7, 19].map(|step| assets.path(format!("video-stills/{}.jpg", (first + step) % n)))
@@ -475,6 +489,10 @@ fn wallpaper(p: &mut Pen, state: &State, assets: &Assets, t: f64) {
     );
     p.fill(Rect::new(298., 372., 40., 22.), 0., c(0x0b0d10, 1.));
     p.fill(Rect::new(228., 390., 180., 10.), 5., c(0x0b0d10, 1.));
+    // Android shows photos only: there are no video sources to label.
+    if cfg!(target_os = "android") {
+        return;
+    }
     // Source chips light up with the matching still.
     let mut on = [0.; 3];
     on[base] = 1. - u;
@@ -891,7 +909,12 @@ fn system(p: &mut Pen, state: &State, assets: &Assets, t: f64) {
     );
     p.accent(state, Rect::new(252., 144., 128., 128.), 24., 1.);
     p.label_centered(
-        "α9",
+        // The LG chip's name; the Chromecast just shows TV.
+        if cfg!(target_os = "android") {
+            "TV"
+        } else {
+            "α9"
+        },
         252.,
         128.,
         208.,
@@ -902,7 +925,16 @@ fn system(p: &mut Pen, state: &State, assets: &Assets, t: f64) {
     let style = p.style(22., 700, false);
     let root = state.root.is_some();
     let version = format!("Luma {}", assets.version.trim());
-    let badges = [version.as_str(), if root { "Root" } else { "No root" }];
+    let badges = [
+        version.as_str(),
+        if cfg!(target_os = "android") {
+            "Android"
+        } else if root {
+            "Root"
+        } else {
+            "No root"
+        },
+    ];
     for (i, label) in badges.iter().enumerate() {
         let x = 110. + 216. * i as f32;
         p.fill(Rect::new(x, 446., 200., 56.), 28., c(0xffffff, 0.08));

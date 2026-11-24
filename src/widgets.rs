@@ -35,6 +35,16 @@ pub enum Kind {
 }
 impl Kind {
     pub const ALL: [Self; 4] = [Self::Weather, Self::Crypto, Self::Hdmi, Self::Smart];
+    /// What this build can add. Android TV has no crypto feed and no HDMI inputs.
+    #[cfg(not(target_os = "android"))]
+    pub const AVAILABLE: &'static [Self] = &Self::ALL;
+    #[cfg(target_os = "android")]
+    pub const AVAILABLE: &'static [Self] = &[Self::Weather, Self::Smart];
+    /// Kinds with a text-line form, in Settings order.
+    #[cfg(not(target_os = "android"))]
+    pub const TEXT: &'static [Self] = &[Self::Weather, Self::Crypto, Self::Smart];
+    #[cfg(target_os = "android")]
+    pub const TEXT: &'static [Self] = &[Self::Weather, Self::Smart];
     pub fn title(self) -> &'static str {
         match self {
             Self::Weather => "Weather",

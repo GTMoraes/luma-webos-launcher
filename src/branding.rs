@@ -59,15 +59,37 @@ pub const BRANDS: &[Brand] = &[
         ids: &["com.webos.app.browser"],
         category: "Utilities",
     },
-    video("netflix", "Netflix", &["netflix"]),
-    video("youtube", "YouTube", &["youtube.leanback.v4"]),
+    // Android TV package names (Chromecast with Google TV) follow the webOS IDs.
+    // TizenTube Cobalt is a YouTube client and gets the YouTube card.
+    video("netflix", "Netflix", &["netflix", "com.netflix.ninja"]),
+    video(
+        "youtube",
+        "YouTube",
+        &[
+            "youtube.leanback.v4",
+            "com.google.android.youtube.tv",
+            "io.gh.reisxd.tizentube.cobalt",
+        ],
+    ),
     video(
         "apple-tv",
         "Apple TV",
-        &["com.apple.appletv", "com.apple.appletv.web"],
+        &[
+            "com.apple.appletv",
+            "com.apple.appletv.web",
+            "com.apple.atve.androidtv.appletv",
+        ],
     ),
-    video("disney-plus", "Disney+", &["com.disney.disneyplus-prod"]),
-    video("prime-video", "Prime Video", &["amazon"]),
+    video(
+        "disney-plus",
+        "Disney+",
+        &["com.disney.disneyplus-prod", "com.disney.disneyplus"],
+    ),
+    video(
+        "prime-video",
+        "Prime Video",
+        &["amazon", "com.amazon.amazonvideo.livingroom"],
+    ),
     video("jellyfin", "Jellyfin", &["org.jellyfin.webos"]),
     video("arte", "ARTE", &["com.arte.tv", "com.3827031.168353"]),
     video("zdf", "ZDF", &["de.zdf.app.zdfm3"]),
@@ -81,12 +103,17 @@ pub const BRANDS: &[Brand] = &[
     video(
         "hbo-max",
         "HBO Max",
-        &["com.wbd.stream", "com.hbo.hbomax", "hbo-go-2"],
+        &[
+            "com.wbd.stream",
+            "com.hbo.hbomax",
+            "hbo-go-2",
+            "com.hbo.hbonow",
+        ],
     ),
     video(
         "paramount-plus",
         "Paramount+",
-        &["com.pplus.webapp.prod-intl", "cbs"],
+        &["com.pplus.webapp.prod-intl", "cbs", "com.cbs.ca"],
     ),
     video("peacock", "Peacock", &["com.peacocktv.peacock"]),
     video("hulu", "Hulu", &["hulu"]),

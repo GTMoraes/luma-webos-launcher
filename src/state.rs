@@ -43,7 +43,12 @@ pub const SECTION_COUNT: usize = 8;
 /// Settings › Stacks (rows of media on Home).
 pub const STACKS_SECTION: usize = 7;
 /// Root order: Appearance and Stacks follow Wallpaper; other IDs keep their mapping.
-pub const SECTION_ORDER: [usize; SECTION_COUNT] = [0, 1, 6, 7, 2, 3, 4, 5];
+#[cfg(not(target_os = "android"))]
+pub const SECTION_ORDER: &[usize] = &[0, 1, 6, 7, 2, 3, 4, 5];
+/// Android TV has no media stacks (Jellyfin, Plex, Moonlight) and no HDMI inputs.
+#[cfg(target_os = "android")]
+pub const SECTION_ORDER: &[usize] = &[0, 1, 6, 2, 4, 5];
+const _: () = assert!(SECTION_ORDER.len() <= SECTION_COUNT);
 pub const APPS_COLUMNS: usize = 6;
 pub const HOME_STRIP_LEFT: f32 = 84.;
 pub const HOME_STRIP_RIGHT: f32 = 1836.;
@@ -2636,7 +2641,7 @@ impl State {
                 return vec![];
             }
             if let Target::Sidebar(index) = self.focus {
-                const ORDER: [usize; SECTION_COUNT] = SECTION_ORDER;
+                const ORDER: &[usize] = SECTION_ORDER;
                 let pos = ORDER.iter().position(|&i| i == index).unwrap_or(0);
                 match direction {
                     Direction::Right => return self.activate(),
@@ -2649,7 +2654,7 @@ impl State {
                         controls,
                     ),
                     Direction::Down => {
-                        self.focus(Target::Sidebar(ORDER[(pos + 1) % SECTION_COUNT]), controls)
+                        self.focus(Target::Sidebar(ORDER[(pos + 1) % ORDER.len()]), controls)
                     }
                     Direction::Left => {}
                 }
@@ -4478,8 +4483,17 @@ impl State {
             Target::Sidebar(index) => {
                 self.section = index;
                 self.subpage = None;
-                let target = self.section_entry();
-                self.settings_push(SettingsLevel::Section, target);
+                if cfg!(target_os = "android") && index == 1 {
+                    // No video wallpapers on Android: Wallpaper opens the photos.
+                    let current = BACKGROUNDS
+                        .iter()
+                        .position(|(id, _)| *id == self.preferences.background)
+                        .unwrap_or(0);
+                    self.settings_push(SettingsLevel::WallpaperPhotos, Target::Background(current));
+                } else {
+                    let target = self.section_entry();
+                    self.settings_push(SettingsLevel::Section, target);
+                }
             }
             Target::WallpaperMenu(index) => match index {
                 0 => self.settings_push(
@@ -4923,6 +4937,9 @@ impl State {
                 SettingsLevel::WallpaperVideos => {
                     self.settings_pop(SettingsLevel::Section, Target::WallpaperMenu(2))
                 }
+                SettingsLevel::WallpaperPhotos if cfg!(target_os = "android") => {
+                    self.settings_pop(SettingsLevel::Root, Target::Sidebar(1))
+                }
                 SettingsLevel::WallpaperPhotos => {
                     self.settings_pop(SettingsLevel::Section, Target::WallpaperMenu(1))
                 }
@@ -5033,6 +5050,9 @@ impl State {
         if self.page != Page::Home {
             self.open(0);
             vec![]
+        } else if cfg!(target_os = "android") {
+            // As on Google TV, Back on Home starts the screensaver (Mystify).
+            vec![Effect::Launch(crate::platform::MYSTIFY_NOW.into())]
         } else {
             vec![]
         }

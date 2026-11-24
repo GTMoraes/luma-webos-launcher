@@ -10,6 +10,9 @@ use std::{collections::HashSet, sync::mpsc, thread};
 
 pub const APP_ID: &str = "com.denisefremov.luma";
 pub const HOME_ID: &str = "com.webos.app.home";
+/// Mystify's "start now" activity on Android TV: Back on Home opens it, as
+/// the Google TV launcher starts its screensaver.
+pub const MYSTIFY_NOW: &str = "com.frx9.mystify/.MystifyAgoraActivity";
 
 pub fn redirect_to_home() -> Result<bool, String> {
     // The root-only integration mounts this marker with its native Home
@@ -72,6 +75,30 @@ pub struct Platform {
     sender: mpsc::Sender<Request>,
     pub receiver: mpsc::Receiver<Response>,
     pub webos: bool,
+    /// Android TV: apps come from the package manager (android.rs).
+    pub android: bool,
+}
+
+#[cfg(target_os = "android")]
+fn app_inventory(_webos: bool) -> Result<(Inventory, Option<String>), String> {
+    crate::android::inventory()
+}
+#[cfg(not(target_os = "android"))]
+fn app_inventory(webos: bool) -> Result<(Inventory, Option<String>), String> {
+    if webos {
+        inventory()
+    } else {
+        Ok((demo_inventory(), None))
+    }
+}
+
+#[cfg(target_os = "android")]
+fn android_launch(id: &str) -> Option<Result<(), String>> {
+    Some(crate::android::launch(id))
+}
+#[cfg(not(target_os = "android"))]
+fn android_launch(_id: &str) -> Option<Result<(), String>> {
+    None
 }
 
 impl Platform {
@@ -81,11 +108,7 @@ impl Platform {
         thread::spawn(move || {
             while let Ok(request) = requests.recv() {
                 let response = match request {
-                    Request::Refresh => Response::Inventory(if webos {
-                        inventory()
-                    } else {
-                        Ok((demo_inventory(), None))
-                    }),
+                    Request::Refresh => Response::Inventory(app_inventory(webos)),
                     Request::Signals => Response::Signals(if webos {
                         hdmi_signals().unwrap_or_default()
                     } else {
@@ -141,21 +164,25 @@ impl Platform {
                         }
                         continue;
                     }
-                    Request::Launch(id) => Response::Launched(if webos {
-                        if crate::scroll_preview::is_placeholder(&id) {
-                            Err("Scroll preview cards cannot be launched".into())
-                        } else if !valid_app_id(&id) {
-                            Err("Invalid application identifier".into())
+                    Request::Launch(id) => {
+                        Response::Launched(if let Some(result) = android_launch(&id) {
+                            result
+                        } else if webos {
+                            if crate::scroll_preview::is_placeholder(&id) {
+                                Err("Scroll preview cards cannot be launched".into())
+                            } else if !valid_app_id(&id) {
+                                Err("Invalid application identifier".into())
+                            } else {
+                                call(
+                                    "luna://com.webos.applicationManager/launch",
+                                    json!({"id": id}),
+                                )
+                                .map(|_| ())
+                            }
                         } else {
-                            call(
-                                "luna://com.webos.applicationManager/launch",
-                                json!({"id": id}),
-                            )
-                            .map(|_| ())
-                        }
-                    } else {
-                        Ok(())
-                    }),
+                            Ok(())
+                        })
+                    }
                 };
                 if responses.send(response).is_err() {
                     break;
@@ -166,6 +193,7 @@ impl Platform {
             sender,
             receiver,
             webos,
+            android: cfg!(target_os = "android"),
         }
     }
 
@@ -249,6 +277,13 @@ fn root_inventory_read(uri: &str, field: &str) -> Result<Value, String> {
     })
 }
 
+/// Android TV: the app's banner or icon, rendered by the package manager.
+#[cfg(target_os = "android")]
+pub fn read_app_icons(source: &app_artwork::Source) -> Result<Vec<Vec<u8>>, String> {
+    crate::android::app_art(&source.id).map(|png| vec![png])
+}
+
+#[cfg(not(target_os = "android"))]
 pub fn read_app_icons(source: &app_artwork::Source) -> Result<Vec<Vec<u8>>, String> {
     if !cfg!(feature = "webos") {
         return Err("Installed artwork is only read on TV builds".into());
