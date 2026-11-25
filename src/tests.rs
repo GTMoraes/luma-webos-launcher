@@ -3460,3 +3460,36 @@ fn unsupported_saved_media_source_is_ignored_without_losing_other_settings() {
     assert_eq!(prefs.stacks[0].collection, "recent");
     assert!(prefs.luma_player);
 }
+
+#[test]
+fn remote_keyboard_types_addresses_in_lowercase_and_shift_capitals() {
+    let mut state = ready();
+    state.open(1);
+    state.focus = Target::Search;
+    state.activate();
+    let press = |state: &mut State, key: &str| {
+        state.focus = Target::Key(crate::state::KEYS.iter().position(|k| *k == key).unwrap());
+        state.activate();
+    };
+    for key in [
+        "h", "t", "t", "p", ":", "/", "/", "h", "a", ".", "x", "-", "1", ":", "8", "1", "2", "3",
+    ] {
+        press(&mut state, key);
+    }
+    assert_eq!(state.editing_text(), "http://ha.x-1:8123");
+    press(&mut state, "Shift");
+    assert!(state.keyboard_upper);
+    press(&mut state, "q");
+    press(&mut state, "@");
+    press(&mut state, "Shift");
+    press(&mut state, "q");
+    assert_eq!(state.editing_text(), "http://ha.x-1:8123Q@q");
+    // Ten keys per row, Done last (the tests above rely on it).
+    assert_eq!(crate::state::KEYS.len() % crate::state::KEYBOARD_COLUMNS, 0);
+    assert_eq!(*crate::state::KEYS.last().unwrap(), "Done");
+    // A new keyboard starts in lowercase.
+    state.back();
+    state.focus = Target::Search;
+    state.activate();
+    assert!(!state.keyboard_upper);
+}

@@ -5,8 +5,8 @@ use crate::{
     motion,
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
-        APPS_COLUMNS, Control, HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect,
-        SYSTEM_SECTION, State, Subpage, Target, TextField, WEATHER_SECTION,
+        APPS_COLUMNS, Control, HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYBOARD_COLUMNS, KEYS, Overlay,
+        Page, Rect, SYSTEM_SECTION, State, Subpage, Target, TextField, WEATHER_SECTION,
     },
     typography::{HeadingFont, TextFont, TextRole},
     weather::{self, Unit},
@@ -4189,7 +4189,7 @@ fn quick(out: &mut Scene, state: &State, assets: &Assets) {
 
 fn keyboard(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
-    let panel = Rect::new(350., 290., 1220., 530.);
+    let panel = Rect::new(350., 250., 1220., 604.);
     out.modal = Some(panel);
     out.shadow(panel, 27.2, 90., 20., 0.45);
     out.glass_on_scrim(panel, 27.2, 0.3);
@@ -4203,47 +4203,50 @@ fn keyboard(out: &mut Scene, state: &State, assets: &Assets) {
             TextField::Apps => language.t("findApp"),
             TextField::Library => "Find a title",
         },
-        Rect::new(389., 324., 1000., 44.),
+        Rect::new(389., 284., 1000., 44.),
         text(37.6, 500, -0.055).leading(1.1),
         WHITE,
         false,
     );
-    let close = Rect::new(1497., 328., 33.6, 33.6);
+    let close = Rect::new(1497., 288., 33.6, 33.6);
     out.icon(assets, "close", close.inset(7.6), WHITE);
     out.control(Target::CloseDialog, close, false);
     if state.focus == Target::CloseDialog {
         out.border(close, 16.8, 2., WHITE);
     }
-    out.shape(Rect::new(389., 390., 1142., 56.), 28., c(0x171c20, 0.72));
+    out.shape(Rect::new(389., 350., 1142., 56.), 28., c(0x171c20, 0.72));
     out.icon(
         assets,
         "search",
-        Rect::new(409., 408., 20., 20.),
+        Rect::new(409., 368., 20., 20.),
         c(0xeeeeee, 0.73),
     );
     out.text(
         format!("{}|", state.editing_text()),
-        Rect::new(446., 406., 1058., 25.),
+        Rect::new(446., 366., 1058., 25.),
         text(20.8, 400, -0.02),
         WHITE,
         false,
     );
     for (index, key) in KEYS.iter().enumerate() {
         let label = match *key {
-            "Space" => language.t("space"),
-            "Delete" => language.t("delete"),
-            "Clear" => language.t("clear"),
-            "Done" => language.t("done"),
-            _ => key,
+            "Shift" => language.t("shift").to_owned(),
+            "Space" => language.t("space").to_owned(),
+            "Delete" => language.t("delete").to_owned(),
+            "Clear" => language.t("clear").to_owned(),
+            "Done" => language.t("done").to_owned(),
+            _ => crate::state::key_text(key, state.keyboard_upper),
         };
+        let label = label.as_str();
         let rect = Rect::new(
-            389. + (index % 10) as f32 * 115.6,
-            474. + (index / 10) as f32 * 74.,
+            389. + (index % KEYBOARD_COLUMNS) as f32 * 115.6,
+            434. + (index / KEYBOARD_COLUMNS) as f32 * 74.,
             101.6,
             60.,
         );
         let focused = state.focus == Target::Key(index);
-        out.pill(rect, focused, false);
+        // Shift stays lit while the letters are in capitals.
+        out.pill(rect, focused, *key == "Shift" && state.keyboard_upper);
         let mut style = text(18.4, 550, -0.02);
         let width = assets.width(label, style);
         if width > rect.w - 12. {

@@ -445,11 +445,26 @@ pub enum BounceAxis {
 }
 const BOUNCE_TIME: f32 = 0.7;
 
-pub const KEYS: [&str; 40] = [
-    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S",
-    "T", "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "Space",
-    "Delete", "Clear", "Done",
+/// Luma's remote keyboard: QWERTY with the digits on top and the symbols an
+/// address, a token or an email needs (`:` `/` `.` `-` `@` `_` `?` `=` `&`).
+/// Ten keys per row; letters follow `keyboard_upper` ("Shift" toggles it).
+pub const KEYS: [&str; 50] = [
+    "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", //
+    "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", //
+    "a", "s", "d", "f", "g", "h", "j", "k", "l", ":", //
+    "z", "x", "c", "v", "b", "n", "m", ".", "/", "-", //
+    "Shift", "@", "_", "?", "=", "&", "Space", "Delete", "Clear", "Done",
 ];
+pub const KEYBOARD_COLUMNS: usize = 10;
+
+/// What a letter key types, or shows, with Shift on or off.
+pub fn key_text(key: &str, upper: bool) -> String {
+    if upper && key.len() == 1 && key.as_bytes()[0].is_ascii_lowercase() {
+        key.to_ascii_uppercase()
+    } else {
+        key.to_owned()
+    }
+}
 
 pub struct FocusTween {
     pub from: f32,
@@ -622,6 +637,8 @@ pub struct State {
     pub weather: weather::Weather,
     pub rude_weather: weather_phrases::Engine,
     pub keyboard_field: TextField,
+    /// Shift on Luma's remote keyboard (letters in capitals).
+    pub keyboard_upper: bool,
     pub greeting_name_draft: String,
     pub input_name: String,
     pub ha_online: bool,
@@ -804,6 +821,7 @@ impl State {
             weather: weather::Weather::default(),
             rude_weather: weather_phrases::Engine::default(),
             keyboard_field: TextField::Apps,
+            keyboard_upper: false,
             greeting_name_draft: String::new(),
             input_name: String::new(),
             ha_online: false,
@@ -3635,6 +3653,7 @@ impl State {
     }
     pub fn open_keyboard(&mut self, field: TextField) {
         self.keyboard_field = field;
+        self.keyboard_upper = false;
         if field == TextField::Name {
             // SDL-webOS cannot pre-fill the system keyboard's text model.
             self.greeting_name_draft.clear();
@@ -5008,6 +5027,10 @@ impl State {
                 };
             }
             Target::Key(index) => match KEYS[index] {
+                "Shift" => {
+                    self.keyboard_upper = !self.keyboard_upper;
+                    self.dirty = true;
+                }
                 "Space" => self.text(" "),
                 "Delete" => self.delete(),
                 "Clear" => match self.keyboard_field {
@@ -5030,7 +5053,10 @@ impl State {
                     self.focus = self.keyboard_return();
                     return self.commit_text_input();
                 }
-                key => self.text(key),
+                key => {
+                    let typed = key_text(key, self.keyboard_upper);
+                    self.text(&typed);
+                }
             },
             _ => {}
         }

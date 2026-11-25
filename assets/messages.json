@@ -1063,6 +1063,13 @@
     "zh": "正在搜索…",
     "pt": "Buscando…"
   },
+  "shift": {
+    "en": "Shift",
+    "de": "Umschalt",
+    "es": "Mayús",
+    "zh": "大写",
+    "pt": "Maiúsc"
+  },
   "space": {
     "en": "Space",
     "de": "Leerzeichen",
